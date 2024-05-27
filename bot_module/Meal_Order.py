@@ -7,7 +7,7 @@ import datetime
 # 目录路径
 res_path = os.path.abspath(os.path.dirname(os.path.dirname(__file__))) + "\\resources"
 file_path = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
-
+BOT_ID=0000000000#外面传入吧
 GROUP_ID: int = None    #点餐群号
 START_TIME = "00:00"
 END_TIME = "00:00"
@@ -74,6 +74,14 @@ def check_order(user_id:int):
 
 def register_help_menu():
     """查询帮助菜单"""
+    @bot.on_message("group")
+    async def _(event: Event):
+        if event.message == "帮助" or str(BOT_ID) in event.message:#需要发送帮助菜单
+            return await bot.send(event,"输入“菜单”来获取点餐列表\n\
+            输入“我的单号”来获取你的点餐单号\n输入“取消点餐”来取消你的所有订单！\
+            \n管理员输入“单号查询+订单号”可查询点单用户\n输入点餐 店名序号 菜名 备注(可选)来点餐\
+                    \n示例：\n点餐 1 香菇滑鸡饭 不要辣",
+                                  at_sender=True)
     
 
 def register_check_order():
