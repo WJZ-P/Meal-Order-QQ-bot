@@ -1,4 +1,4 @@
-from aiocqhttp import CQHttp, Event
+from aiocqhttp import CQHttp, Event,MessageSegment
 import os
 import json
 import asyncio
@@ -15,7 +15,7 @@ CAN_ORDER = False       #是否可以点餐
 MENU:dict=None          #菜单列表
 MENU_PICTURE:str=''
 ORDER_NUMBER = 1        #当天的点餐订单总序号
-
+XIAOLE_ID=0             #小乐姐姐ID
 bot = CQHttp("嘻嘻哈哈")
 
 
@@ -41,6 +41,12 @@ class Order:
             (f"\n备注：{self.tips}" if self.tips else '')
 
 ALL_ORDER:list[Order]=[]            #存储当前点单的所有序号
+
+def get_menu():
+    """更新菜单"""
+    global MENU
+    with open(res_path + r"\food_menu.json", encoding="utf-8") as file:
+        MENU: dict = json.load(file)  # 获取菜单
 
 
 def find_dish(order_messages:list)->tuple:  
@@ -72,30 +78,46 @@ def check_order(user_id:int):
             user_order.append(order)
     return user_order
 
+def print_order_list():
+    """打印出点单列表"""
+    
+
 def register_help_menu():
     """查询帮助菜单"""
     @bot.on_message("group")
     async def _(event: Event):
-        if event.message == "帮助" or str(BOT_ID) in event.message:#需要发送帮助菜单
-            return await bot.send(event,"输入“菜单”来获取点餐列表\n\
-            输入“我的单号”来获取你的点餐单号\n输入“取消点餐”来取消你的所有订单！\
-            \n管理员输入“单号查询+订单号”可查询点单用户\n输入点餐 店名序号 菜名 备注(可选)来点餐\
-                    \n示例：\n点餐 1 香菇滑鸡饭 不要辣",
-                                  at_sender=True)
-    
+        if event.group_id==GROUP_ID:
+            if event.message == "帮助" or str(BOT_ID) in event.message:#需要发送帮助菜单
+                return await bot.send(event,"输入“菜单”来获取点餐列表\n\
+                输入“我的单号”来获取你的点餐单号\n输入“取消点餐”来取消你的所有订单！\
+                \n管理员输入“单号查询+订单号”可查询点单用户\n输入点餐 店名序号 菜名 备注(可选)来点餐\
+                        \n示例：\n点餐 1 香菇滑鸡饭 不要鸡不要饭",
+                                      at_sender=True)
+
+            if event.message=='菜单':
+                return await bot.send(event, MessageSegment.image(MENU_PICTURE))
+
+
 
 def register_check_order():
     """实现群内用户查询点餐功能"""
     @bot.on_message("group")
     async def _(event: Event):
-        if event.message == "我的单号":
+        if event.message == "我的单号" and event.group_id==GROUP_ID:
             user_order=check_order(event.user_id)
             if not user_order:
                 return await bot.send(event,"你还没有点单哦！(｡･∀･)ﾉﾞ",at_sender=True)
             for order in user_order:#如果有多个点餐信息，我们打印出来
                 await bot.send(event,order.getOrderInfo(),at_sender=True)
                 await asyncio.sleep(0.3)
-            return
+         
+        if event.message.startswith("单号查询") and event.group_id==GROUP_ID:
+            order_numbers=event.message[3:].split(' ')
+            for order_need_to_check in order_numbers:
+                for order in ALL_ORDER:
+                    if order.order_number==order_need_to_check:
+                        await bot.send(event,order.getOrderInfo()+f'[CQ:at,qq={order.qq_number}]')
+            return await bot.send(event,"没有这个订单号哦！(つД`)ノ",at_sender=True)
 
 
 def register_meal_ordering():
@@ -139,9 +161,50 @@ def register_meal_ordering():
                         return await bot.send(event,"点餐成功！٩(≧▽≦*)o\n\
                         你的单号：" + ORDER_NUMBER + "\\n请记得取餐哦！",at_sender=True)
                 
+def start_ordering(bot: CQHttp):
+    """开始点餐"""
+    async def _(bot: CQHttp):
+        print("开始点餐")
+        global CAN_ORDER
+        global MENU
+        global ORDER_NUMBER
+        ORDER_NUM = 0  # 点餐序号归零
+        CAN_ORDER = True
+        MENU = get_menu()  # 每次开始点餐，更新菜单
+        #asyncio.create_task(bot.send_group_msg(group_id=int(group),
+        #    message="点餐开始了哦！(✪ω✪)\n点餐格式：\n点餐 店名序号 菜名 备注(可选)\n示例：\n点餐 1 香菇滑鸡饭 不要辣"))
+        asyncio.create_task(bot.send_group_msg(group_id=int(GROUP_ID),
+                                               message="[CQ:at,qq=all]点餐开始了哦！(✪ω✪)\n点餐格式：\n点餐 店名序号 菜名 备注(可选)\n示例：\n点餐 1 香菇滑鸡饭 不要辣" + MessageSegment.image(
+                                                   MENU_PICTURE)+"\n输入“我的单号”来查看取餐号\n输入“菜单”显示菜单\n输入“帮助”来查看指令\n命令都不需要加前缀哦！" + MessageSegment.image(
+                                                   "https://article.biliimg.com/bfs/article/6691afe19dfe408500d6fadb750a7bc039684091.gif")))  # 猫娘炒饭
+        asyncio.create_task(bot.set_group_card(group_id=int(GROUP_ID), user_id=BOT_ID, card="激情点餐ing!(๑´ڡ`๑)"))
+        await asyncio.sleep(2)
 
+    asyncio.run(_(bot))
 
-                
+def stop_ordering(bot: CQHttp):
+    async def _(bot: CQHttp):
+        """停止点餐,并把总订单发送给管理员"""
+        print("停止点餐")
+        global CAN_ORDER
+        CAN_ORDER = False
+        order_list = print_order_list()  # 获取总的订单，下面发给管理员
+        print(order_list)
+        asyncio.create_task(
+            bot.send_group_msg(group_id=int(GROUP_ID), message="点餐结束啦！记得到指定地点领餐哦！ (＾ｖ＾)",
+                               auto_escape=False))
+        try:
+            asyncio.create_task(bot.send_group_msg(group_id=865997606,message=order_list))#发一份给木桥群备案
+            await asyncio.sleep(1)
+            asyncio.create_task(bot.send_msg(user_id=XIAOLE_ID, message=order_list))  # XIAOLE_ID,发送总的点餐统计消息给小乐姐姐
+        except:
+            asyncio.create_task(bot.send_msg(user_id=XIAOLE_ID, message=order_list))  # XIAOLE_ID,发送总的点餐统计消息给小乐姐姐
+        
+        asyncio.create_task(
+            bot.set_group_card(group_id=int(GROUP_ID), user_id=BOT_ID, card="快乐食间外带点餐员(ฅ^ω^ฅ)"))  # 改回原来的名字
+        await asyncio.sleep(2)
+
+    asyncio.run(_(bot))            
 
                 
 
