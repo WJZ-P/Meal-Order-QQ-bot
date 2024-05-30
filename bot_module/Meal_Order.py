@@ -11,19 +11,15 @@ import threading
 res_path = os.path.abspath(os.path.dirname(os.path.dirname(__file__))) + "\\resources"
 file_path = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
 BOT_ID=1524550199       #从外面传入的bot机器人ID
-GROUP_ID: int = 543613447    #点餐群号
-START_TIME = "09:00"
-END_TIME = "11:30"
+GROUP_ID: int = 801275394    #点餐群号
+START_TIME = "15:28"
+END_TIME = "15:29"
 CAN_ORDER = False       #是否可以点餐
-MENU:dict=None          #菜单列表
+MENU={}                 #菜单列表
 MENU_PICTURE:str='https://article.biliimg.com/bfs/new_dyn/cc30ea15979e9e46cb70b598a948c38f39684091.png'     #图片的路径
-ORDER_NUMBER = 1        #当天的点餐订单总序号
+ORDER_NUMBER = 0        #当天的点餐订单总序号
 XIAOLE_ID=1451919350    #小乐姐姐ID
 bot = CQHttp("嘻嘻哈哈")
-
-
-with open(res_path + r"\food_menu.json", encoding="utf-8") as file:
-    MENU: dict = json.load(file)  # 获取菜单
 
 class Order:
     """订单类，包含菜品名、"""
@@ -40,7 +36,7 @@ class Order:
 
     def getOrderInfo(self):
         return f"订单信息：\n订单号：{self.order_number}\n店铺名：{self.shop_name}\
-            \n菜品名和价格：{self.dish}：{self.price}\n\n点单QQ号：{self.qq_number}"+\
+            \n菜品名：{self.dish}：{self.price}元\n点单QQ号：{self.qq_number}"+\
             (f"\n备注：{self.tips}" if self.tips else '')
             
     def getOrderInfo_simple(self):
@@ -52,8 +48,7 @@ def get_menu():
     """更新菜单"""
     global MENU
     with open(res_path + r"\food_menu.json", encoding="utf-8") as file:
-        MENU: dict = json.load(file)  # 获取菜单
-
+        MENU = json.load(file)  # 获取菜单
 
 def find_dish(order_messages:list)->tuple:  
     """根据输入信息找到对应餐品，输入信息 0为店家序号
@@ -70,7 +65,7 @@ def find_dish(order_messages:list)->tuple:
         if shop.startswith(shop_num):#找到了对应的店家
             shop_name=shop.split('.')[1]
             dish_price = MENU[shop].get(order_dish,0)#查找价格
-            if dish_price: return ("FIND_SUCCESS",0,shop_name)
+            if dish_price: return ("FIND_SUCCESS",dish_price,shop_name)
             return ("DISH_NOT_FOUND",0,shop_name)#价格是0，说明没找到这个菜
     return ("SHOP_NOT_FOUND",0,shop_name)
 
@@ -91,29 +86,31 @@ def print_order_list():
     for order in ALL_ORDER:
         orders_by_shop[order.shop_name][order.dish].append(order)
     
-    order_messages=[]#先存放每个店铺的总点单信息，未排序的!!
+    order_messages=[]  # 先存放每个店铺的总点单信息，未排序的!!
     
     # 格式化并插入订单信息
-    for shop_name, dishes in enumerate(orders_by_shop.items()):
-        shop_order_message=shop_name+':\n' #如大米兄弟:\n
-        
+    for shop_name, dishes in orders_by_shop.items():
+        shop_order_message = f"{shop_name}:\n"  # 如大米兄弟:\n
         for dish, orders in dishes.items():
-            shop_order_message+= f"{dish}: (共{len(orders)}人)\n"
+            shop_order_message += f"{dish}: (共{len(orders)}人)\n"
             for order in orders:
-                shop_order_message+=order.getOrderInfo_simple()
+                shop_order_message += order.getOrderInfo_simple() + "\n"
         order_messages.append(shop_order_message)
     
-    #现在order_messages里面放着所有的订单信息。
-    sorted_order_messages=[]#排序后
-    for shop_name in MENU:   #shop_name形如  1.大米兄弟  2.嘻嘻哈哈
+    # 现在order_messages里面放着所有的订单信息。
+    sorted_order_messages = []  # 排序后
+    for shop_name in MENU:  # shop_name形如  1.大米兄弟  2.嘻嘻哈哈
         for message in order_messages:
-            if message.startswith(shop_name.split('.'[1])):
+            if message.startswith(shop_name.split('.')[1]):
                 sorted_order_messages.append(message)
                 break
-    total_message=''
+    total_message = ''
     for message in sorted_order_messages:
-        total_message+=message+'\n'
+        total_message += message + '\n'
+        
+    print("打印出总订单\n"+total_message)
     return total_message
+
     
 
 def register_help_menu():
@@ -122,8 +119,8 @@ def register_help_menu():
     async def _(event: Event):
         if event.group_id==GROUP_ID:
             if event.message == "帮助" or str(BOT_ID) in event.message:#需要发送帮助菜单
-                return await bot.send(event,"输入“菜单”来获取点餐列表\n\
-                输入“我的单号”来获取你的点餐单号\n输入“取消点餐”来取消你的所有订单！\
+                return await bot.send(event,"输入“菜单”来获取点餐列表\
+                \n输入“我的单号”来获取你的点餐单号\n输入“取消点餐”来取消你的所有订单！\
                 \n管理员输入“单号查询+订单号”可查询点单用户\n输入点餐 店名序号 菜名 备注(可选)来点餐\
                         \n示例：\n点餐 1 香菇滑鸡饭 不要鸡不要饭",
                                       at_sender=True)
@@ -146,7 +143,7 @@ def register_check_order():
                 await asyncio.sleep(0.3)
          
         if event.message.startswith("单号查询") and event.group_id==GROUP_ID:
-            order_numbers=event.message[3:].split(' ')
+            order_numbers=event.message[4:].split(' ')
             for order_need_to_check in order_numbers:
                 for order in ALL_ORDER:
                     if order.order_number==order_need_to_check:
@@ -160,17 +157,19 @@ def register_meal_ordering():
     async def _(event: Event):
         if event.group_id == GROUP_ID:
             if event.message.startswith("点餐"):  # 触发点餐条件
+                if not CAN_ORDER:
+                    return await bot.send(event,f'现在还不是点餐时间哦！点餐时间是{START_TIME}-{END_TIME}',at_sender=True)
                 now = datetime.datetime.now()
-                
                 if now.weekday() >= 5:  # 周六周日不点餐
                     return await bot.send(event, "周末不点餐嘞!(ノ≧∀≦)ノ ミ ┻━┻", at_sender=True)
 
-                if event.message == "点餐":  # 没说点什么
+                if event.message == "点餐" or len(event.message[2:].split(' '))<2:# 没说点什么
                     return await bot.send(event,"你要点什么呢？(｡･∀･)ﾉﾞ\n输入菜单来获取点餐列表\n\
                         点餐示例: 点餐 1 香菇滑鸡饭",at_sender=True)
                     
-                order_messages:list=event.message[2:].split(' ')# 1 香菇滑鸡饭 不要辣
+                order_messages:list=event.message[2:].strip().split(' ')# 1 香菇滑鸡饭 不要辣
                 result_tuple=find_dish(order_messages)
+                print(result_tuple)
                 match result_tuple[0]:
                     
                     case "SHOP_NOT_FOUND":
@@ -178,22 +177,21 @@ def register_meal_ordering():
                             点餐 1 香菇滑鸡饭\n示例2:\n点餐 1 香菇滑鸡饭 不要辣",at_sender=True)
                         
                     case "DISH_NOT_FOUND":
-                        return await bot.send(event,"这个店没有这个菜哦！请重新点餐！(ㄒoㄒ)", at_sender=True)
+                        return await bot.send(event,"这家店没有这个菜哦！请重新点餐！(ㄒoㄒ)", at_sender=True)
                     
                     case "FIND_SUCCESS":#成功找到了，下面应该创建订单
+                        global ORDER_NUMBER
+                        ORDER_NUMBER=ORDER_NUMBER+1
                         new_order=Order(order_messages[1],result_tuple[1],
                         event.user_id,ORDER_NUMBER,result_tuple[2],
                         order_messages[2] if len(order_messages)>2 else '')
                         
                         global ALL_ORDER
-                        global ORDER_NUMBER
-                        
                         ALL_ORDER.append(new_order)
-                        ORDER_NUMBER=ORDER_NUMBER+1
                         print(new_order.getOrderInfo())#顺便打印出来看看
                         
                         return await bot.send(event,"点餐成功！٩(≧▽≦*)o\n\
-                        你的单号：" + ORDER_NUMBER + "\\n请记得取餐哦！",at_sender=True)
+                        你的单号：" + str(ORDER_NUMBER) + "\n请记得取餐哦！",at_sender=True)
                         
 def register_cancel_order():
     """实现群内用户取消点餐功能"""
@@ -208,33 +206,34 @@ def register_cancel_order():
                     ALL_ORDER.remove(order)
                     print(f"删除了订单{order.order_number}")
             if have_order:
-                return await bot.send(event,"已取消你的所有点餐！(◕‿◕❀)[CQ:at,]")
+                return await bot.send(event,f"已取消你的所有点餐！(◕‿◕❀)[CQ:at,qq={event.user_id}]")
+            return await bot.send(event,"你没有点餐我取消啥?(=^-ω-^=)",at_sender=True)
                 
 def start_ordering(bot: CQHttp):
     """开始点餐"""
+    
     async def _(bot: CQHttp):
         print("开始点餐")
         global CAN_ORDER
-        global MENU
         global ORDER_NUMBER
-        ORDER_NUMBER = 0  # 点餐序号归零
+        ORDER_NUMBER = 0  # 点餐序号重置
         CAN_ORDER = True
-        MENU = get_menu()  # 每次开始点餐，更新菜单
-        #asyncio.create_task(bot.send_group_msg(group_id=int(group),
+        get_menu()  # 每次开始点餐，更新菜单
+        print("点餐开始了！下面在群里发送信息")
+        #await bot.send_group_msg(group_id=int(GROUP_ID),message="可以点餐啦！")
+        # await bot.send_group_msg(group_id=int(group),
         #    message="点餐开始了哦！(✪ω✪)\n点餐格式：\n点餐 店名序号 菜名 备注(可选)\n示例：\n点餐 1 香菇滑鸡饭 不要辣"))
         asyncio.create_task(bot.send_group_msg(group_id=int(GROUP_ID),
                                                message="[CQ:at,qq=all]点餐开始了哦！(✪ω✪)\n点餐格式：\n点餐 店名序号 菜名 备注(可选)\n示例：\n点餐 1 香菇滑鸡饭 不要辣" + MessageSegment.image(
                                                    MENU_PICTURE)+"\n输入“我的单号”来查看取餐号\n输入“菜单”显示菜单\n输入“帮助”来查看指令\n命令都不需要加前缀哦！" + MessageSegment.image(
                                                    "https://article.biliimg.com/bfs/article/6691afe19dfe408500d6fadb750a7bc039684091.gif")))  # 猫娘炒饭
         asyncio.create_task(bot.set_group_card(group_id=int(GROUP_ID), user_id=BOT_ID, card="激情点餐ing!(๑´ڡ`๑)"))
-        await asyncio.sleep(2)
 
     asyncio.run(_(bot))
 
 def stop_ordering(bot: CQHttp):
     """停止点餐,并把总订单发送给管理员"""
     async def _(bot: CQHttp):
-
         print("停止点餐")
         global CAN_ORDER
         CAN_ORDER = False
@@ -243,19 +242,17 @@ def stop_ordering(bot: CQHttp):
         asyncio.create_task(
             bot.send_group_msg(group_id=int(GROUP_ID), message="点餐结束啦！记得到指定地点领餐哦！ (＾ｖ＾)",
                                auto_escape=False))
-        try:
-            # asyncio.create_task(bot.send_group_msg(group_id=865997606,message=order_list))#发一份给木桥群备案
-            # await asyncio.sleep(1)
-            asyncio.create_task(bot.send_msg(user_id=XIAOLE_ID, message=order_list))  # XIAOLE_ID,发送总的点餐统计消息给小乐姐姐
-            
-            await asyncio.sleep(1)
-            asyncio.create_task(bot.send_msg(user_id=BOT_ID, message=order_list))   #发送一份给自己
-        except:
-            asyncio.create_task(bot.send_msg(user_id=XIAOLE_ID, message=order_list))  # XIAOLE_ID,发送总的点餐统计消息给小乐姐姐
-        
-        asyncio.create_task(
-            bot.set_group_card(group_id=int(GROUP_ID), user_id=BOT_ID, card="快乐食间外带点餐员(ฅ^ω^ฅ)"))  # 改回原来的名字
-        await asyncio.sleep(2)
+
+        # asyncio.create_task(bot.send_group_msg(group_id=865997606,message=order_list))#发一份给木桥群备案
+        # await asyncio.sleep(1)
+        asyncio.create_task(bot.send_msg(user_id=XIAOLE_ID, message=order_list))  # XIAOLE_ID,发送总的点餐统计消息给小乐姐姐
+        await asyncio.sleep(1)
+        asyncio.create_task(bot.send_msg(user_id=BOT_ID, message=order_list))   #发送一份给机器人自己
+        await asyncio.sleep(1)
+        asyncio.create_task(bot.send_msg(user_id=1369727119, message=order_list))   #发送一份给我
+        await asyncio.sleep(1)
+        asyncio.create_task(bot.set_group_card(group_id=int(GROUP_ID), user_id=BOT_ID, card="快乐食间外带点餐员(ฅ^ω^ฅ)"))  
+        # 改回原来的名字
 
     asyncio.run(_(bot))            
 
@@ -282,23 +279,23 @@ def time_trigger(bot: CQHttp):
     def _():
         time_schedule = schedule.Scheduler()
         #下面是周一到周五点餐的触发器
-        time_schedule.every().monday.at(START_TIME).do(start_ordering, bot)
-        time_schedule.every().monday.at(END_TIME).do(stop_ordering, bot)
-        #
-        time_schedule.every().tuesday.at(START_TIME).do(start_ordering, bot)
-        time_schedule.every().tuesday.at(END_TIME).do(stop_ordering, bot)
-        #
-        time_schedule.every().wednesday.at(START_TIME).do(start_ordering, bot)
-        time_schedule.every().wednesday.at(END_TIME).do(stop_ordering, bot)
-        #
-        time_schedule.every().thursday.at(START_TIME).do(start_ordering, bot)
-        time_schedule.every().thursday.at(END_TIME).do(stop_ordering, bot)
-        #
-        time_schedule.every().friday.at(START_TIME).do(start_ordering, bot)
-        time_schedule.every().friday.at(END_TIME).do(stop_ordering, bot)#周五不点餐
+        # time_schedule.every().monday.at(START_TIME).do(start_ordering, bot)
+        # time_schedule.every().monday.at(END_TIME).do(stop_ordering, bot)
+        # #
+        # time_schedule.every().tuesday.at(START_TIME).do(start_ordering, bot)
+        # time_schedule.every().tuesday.at(END_TIME).do(stop_ordering, bot)
+        # #
+        # time_schedule.every().wednesday.at(START_TIME).do(start_ordering, bot)
+        # time_schedule.every().wednesday.at(END_TIME).do(stop_ordering, bot)
+        # #
+        # time_schedule.every().thursday.at(START_TIME).do(start_ordering, bot)
+        # time_schedule.every().thursday.at(END_TIME).do(stop_ordering, bot)
+        # #
+        # time_schedule.every().friday.at(START_TIME).do(start_ordering, bot)
+        # time_schedule.every().friday.at(END_TIME).do(stop_ordering, bot)#周五不点餐
         #周末不点餐
-        time_schedule.every().day.at(START_TIME).do(start_ordering, bot)
-        time_schedule.every().day.at(END_TIME).do(stop_ordering, bot)
+        time_schedule.every().day.at(START_TIME).do(start_ordering, bot)    #每天这个时候都出发
+        time_schedule.every().day.at(END_TIME).do(stop_ordering, bot)       #每天都触发s
         while True:
             time_schedule.run_pending()
             time.sleep(5)
@@ -313,8 +310,7 @@ def run(mybot:CQHttp):
     register_check_order()  #我的单号
     register_help_menu()    #查看菜单
     register_meal_ordering()#点餐功能
-    register_new_member_welcome()#欢迎新成员加入
-    
-    time_trigger(bot)   #开启时间触发器
-    
+    register_new_member_welcome(bot)#欢迎新成员加入
     print("重庆师范大学——点餐系统启动！")
+    get_menu()
+    time_trigger(bot)   #开启时间触发器
