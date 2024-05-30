@@ -4,11 +4,14 @@ import json
 import asyncio
 import datetime
 from collections import defaultdict
+import schedule
+import time
+import threading
 # 目录路径
 res_path = os.path.abspath(os.path.dirname(os.path.dirname(__file__))) + "\\resources"
 file_path = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
 BOT_ID=1524550199       #从外面传入的bot机器人ID
-GROUP_ID: int = None    #点餐群号
+GROUP_ID: int = 543613447    #点餐群号
 START_TIME = "09:00"
 END_TIME = "11:30"
 CAN_ORDER = False       #是否可以点餐
@@ -30,9 +33,9 @@ class Order:
         self.dish = dish                    #菜品名
         self.qq_number = qq_number          #QQ号
         self.order_number = order_number    #订单号
-        self.shop_name = shop_name
-        self.tips=tips
-        self.price=price
+        self.shop_name = shop_name          #店家名字
+        self.tips=tips                      #备注
+        self.price=price                    #餐品价格
         pass
 
     def getOrderInfo(self):
@@ -196,7 +199,7 @@ def register_cancel_order():
     """实现群内用户取消点餐功能"""
     @bot.on_message("group")
     async def _(event: Event):
-        if event.message=='取消点餐' and event.group_id==GROUP_ID:
+        if (event.message=='取消点餐' or event.message=="取消订单") and event.group_id==GROUP_ID:
             have_order=False
             global ALL_ORDER
             for order in ALL_ORDER:
@@ -204,6 +207,8 @@ def register_cancel_order():
                     have_order=True
                     ALL_ORDER.remove(order)
                     print(f"删除了订单{order.order_number}")
+            if have_order:
+                return await bot.send(event,"已取消你的所有点餐！(◕‿◕❀)[CQ:at,]")
                 
 def start_ordering(bot: CQHttp):
     """开始点餐"""
@@ -227,8 +232,9 @@ def start_ordering(bot: CQHttp):
     asyncio.run(_(bot))
 
 def stop_ordering(bot: CQHttp):
+    """停止点餐,并把总订单发送给管理员"""
     async def _(bot: CQHttp):
-        """停止点餐,并把总订单发送给管理员"""
+
         print("停止点餐")
         global CAN_ORDER
         CAN_ORDER = False
@@ -271,3 +277,44 @@ def register_new_member_welcome(bot: CQHttp):
                     at_sender=True,
                 )
             )
+
+def time_trigger(bot: CQHttp):
+    def _():
+        time_schedule = schedule.Scheduler()
+        #下面是周一到周五点餐的触发器
+        time_schedule.every().monday.at(START_TIME).do(start_ordering, bot)
+        time_schedule.every().monday.at(END_TIME).do(stop_ordering, bot)
+        #
+        time_schedule.every().tuesday.at(START_TIME).do(start_ordering, bot)
+        time_schedule.every().tuesday.at(END_TIME).do(stop_ordering, bot)
+        #
+        time_schedule.every().wednesday.at(START_TIME).do(start_ordering, bot)
+        time_schedule.every().wednesday.at(END_TIME).do(stop_ordering, bot)
+        #
+        time_schedule.every().thursday.at(START_TIME).do(start_ordering, bot)
+        time_schedule.every().thursday.at(END_TIME).do(stop_ordering, bot)
+        #
+        time_schedule.every().friday.at(START_TIME).do(start_ordering, bot)
+        time_schedule.every().friday.at(END_TIME).do(stop_ordering, bot)#周五不点餐
+        #周末不点餐
+        time_schedule.every().day.at(START_TIME).do(start_ordering, bot)
+        time_schedule.every().day.at(END_TIME).do(stop_ordering, bot)
+        while True:
+            time_schedule.run_pending()
+            time.sleep(5)
+
+    threading.Thread(target=_).start()
+
+def run(mybot:CQHttp):
+    """启动服务"""
+    global bot
+    bot=mybot       #设置bot
+    register_cancel_order() #取消点餐
+    register_check_order()  #我的单号
+    register_help_menu()    #查看菜单
+    register_meal_ordering()#点餐功能
+    register_new_member_welcome()#欢迎新成员加入
+    
+    time_trigger(bot)   #开启时间触发器
+    
+    print("重庆师范大学——点餐系统启动！")
