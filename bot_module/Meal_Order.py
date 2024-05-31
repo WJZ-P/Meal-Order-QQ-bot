@@ -12,8 +12,8 @@ res_path = os.path.abspath(os.path.dirname(os.path.dirname(__file__))) + "\\reso
 file_path = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
 BOT_ID=1524550199       #从外面传入的bot机器人ID
 GROUP_ID: int = 801275394    #点餐群号
-START_TIME = "15:28"
-END_TIME = "15:29"
+START_TIME = "16:33"
+END_TIME = "16:34"
 CAN_ORDER = False       #是否可以点餐
 MENU={}                 #菜单列表
 MENU_PICTURE:str='https://article.biliimg.com/bfs/new_dyn/cc30ea15979e9e46cb70b598a948c38f39684091.png'     #图片的路径
@@ -40,7 +40,7 @@ class Order:
             (f"\n备注：{self.tips}" if self.tips else '')
             
     def getOrderInfo_simple(self):
-        return f"单号:{self.order_number}:￥{self.price}" + (f" (备注: {self.tips})" if self.tips else '')       
+        return f"单号:{self.order_number}:￥{self.price}" + (f" (备注: {self.tips})  " if self.tips else '  ')       
 
 ALL_ORDER:list[Order]=[]            #存储当前的所有点单
 
@@ -81,37 +81,42 @@ def check_order(user_id:int):
 
 def print_order_list():
     """打印出点单列表"""
+    
+    total_message=[f'今天共有{len(ALL_ORDER)}个订单:']#存储每一家店铺的点单信息列表
     # 按店铺名组织订单
-    orders_by_shop = defaultdict(lambda: defaultdict(list))
+    order_shop_today=[]#今天的订单中一共几家店被点了，需要排序
     for order in ALL_ORDER:
-        orders_by_shop[order.shop_name][order.dish].append(order)
-    
-    order_messages=[]  # 先存放每个店铺的总点单信息，未排序的!!
-    
-    # 格式化并插入订单信息
-    for shop_name, dishes in orders_by_shop.items():
-        shop_order_message = f"{shop_name}:\n"  # 如大米兄弟:\n
-        for dish, orders in dishes.items():
-            shop_order_message += f"{dish}: (共{len(orders)}人)\n"
-            for order in orders:
-                shop_order_message += order.getOrderInfo_simple() + "\n"
-        order_messages.append(shop_order_message)
-    
-    # 现在order_messages里面放着所有的订单信息。
-    sorted_order_messages = []  # 排序后
-    for shop_name in MENU:  # shop_name形如  1.大米兄弟  2.嘻嘻哈哈
-        for message in order_messages:
-            if message.startswith(shop_name.split('.')[1]):
-                sorted_order_messages.append(message)
-                break
-    total_message = ''
-    for message in sorted_order_messages:
-        total_message += message + '\n'
+        if order.shop_name not in order_shop_today:
+            order_shop_today.append(order.shop_name)
+            
+    #   接下来我们需要对店铺名字进行排序
+    sorted_order_shop_today={}
+    for shop_name in MENU:
+        if shop_name.split('.')[1] in order_shop_today:
+            sorted_order_shop_today[shop_name]=[]#这里的shop_name类似   1.大米兄弟
+            
+    #现在排序已经完成，接下来我们需要按照店家名字来组织订单
+    for shop_name in sorted_order_shop_today:   #[大米兄弟,卫子夫]
+        order_of_this_shop={}#每一家店的所有订单
+        for order in ALL_ORDER:
+            if order.shop_name== shop_name.split('.')[1]:#大米兄弟 == 大米兄弟  找到了属于这家店的菜了！
+                if order.dish not in order_of_this_shop:
+                    order_of_this_shop[order.dish]=[order]#把是某个菜品的所有order都放进来！    
+                    #如1.大米兄弟{'香菇牛肉饭':[object:order]}
+                else: order_of_this_shop[order.dish].append(order)
         
-    print("打印出总订单\n"+total_message)
-    return total_message
+        #上面已经插入了所有的信息啦！接下来要转成字符串
+        message= shop_name+'\n'  #"如:1.大米兄弟"
+        for dish in order_of_this_shop:
+            message+='\t'+dish+f':共{len(order_of_this_shop[dish])}人\n\t\t'
+            for order in order_of_this_shop[dish]:
+                message+=order.getOrderInfo_simple()
+            message+='\n'
+        
+        total_message.append(message)#插入信息
+        
+    return '\n'.join(total_message)#返回所有信息
 
-    
 
 def register_help_menu():
     """查询帮助菜单"""
@@ -143,11 +148,11 @@ def register_check_order():
                 await asyncio.sleep(0.3)
          
         if event.message.startswith("单号查询") and event.group_id==GROUP_ID:
-            order_numbers=event.message[4:].split(' ')
+            order_numbers=event.message[4:].strip().split(' ')
             for order_need_to_check in order_numbers:
                 for order in ALL_ORDER:
-                    if order.order_number==order_need_to_check:
-                        await bot.send(event,order.getOrderInfo()+f'[CQ:at,qq={order.qq_number}]')
+                    if order.order_number==int(order_need_to_check):
+                        return await bot.send(event,order.getOrderInfo()+f'\n点单同学：[CQ:at,qq={order.qq_number}]')
             return await bot.send(event,"没有这个订单号哦！(つД`)ノ",at_sender=True)
 
 
@@ -163,11 +168,19 @@ def register_meal_ordering():
                 if now.weekday() >= 5:  # 周六周日不点餐
                     return await bot.send(event, "周末不点餐嘞!(ノ≧∀≦)ノ ミ ┻━┻", at_sender=True)
 
-                if event.message == "点餐" or len(event.message[2:].split(' '))<2:# 没说点什么
+                if event.message == "点餐":# 没说点什么
                     return await bot.send(event,"你要点什么呢？(｡･∀･)ﾉﾞ\n输入菜单来获取点餐列表\n\
                         点餐示例: 点餐 1 香菇滑鸡饭",at_sender=True)
                     
-                order_messages:list=event.message[2:].strip().split(' ')# 1 香菇滑鸡饭 不要辣
+                nums_index=0
+                message=event.message[2:]
+                while message[nums_index].isdigit():  # 获取序号
+                    nums_index += 1
+                    
+                order_messages=[]
+                order_messages.append(message[:nums_index])  # 序号
+                order_messages += message[nums_index:].strip().split(" ")  # 香菇滑鸡饭 备注（可选）
+                
                 result_tuple=find_dish(order_messages)
                 print(result_tuple)
                 match result_tuple[0]:
@@ -190,8 +203,8 @@ def register_meal_ordering():
                         ALL_ORDER.append(new_order)
                         print(new_order.getOrderInfo())#顺便打印出来看看
                         
-                        return await bot.send(event,"点餐成功！٩(≧▽≦*)o\n\
-                        你的单号：" + str(ORDER_NUMBER) + "\n请记得取餐哦！",at_sender=True)
+                        return await bot.send(event,"点餐成功！٩(≧▽≦*)o\
+                        \n你的单号：" + str(ORDER_NUMBER) + "\n请记得取餐哦！",at_sender=True)
                         
 def register_cancel_order():
     """实现群内用户取消点餐功能"""
@@ -221,12 +234,15 @@ def start_ordering(bot: CQHttp):
         get_menu()  # 每次开始点餐，更新菜单
         print("点餐开始了！下面在群里发送信息")
         #await bot.send_group_msg(group_id=int(GROUP_ID),message="可以点餐啦！")
-        # await bot.send_group_msg(group_id=int(group),
-        #    message="点餐开始了哦！(✪ω✪)\n点餐格式：\n点餐 店名序号 菜名 备注(可选)\n示例：\n点餐 1 香菇滑鸡饭 不要辣"))
-        asyncio.create_task(bot.send_group_msg(group_id=int(GROUP_ID),
+
+        asyncio.create_task(bot.send_group_msg(group_id=int(GROUP_ID),#[CQ:at,qq=all]
                                                message="[CQ:at,qq=all]点餐开始了哦！(✪ω✪)\n点餐格式：\n点餐 店名序号 菜名 备注(可选)\n示例：\n点餐 1 香菇滑鸡饭 不要辣" + MessageSegment.image(
                                                    MENU_PICTURE)+"\n输入“我的单号”来查看取餐号\n输入“菜单”显示菜单\n输入“帮助”来查看指令\n命令都不需要加前缀哦！" + MessageSegment.image(
                                                    "https://article.biliimg.com/bfs/article/6691afe19dfe408500d6fadb750a7bc039684091.gif")))  # 猫娘炒饭
+        # asyncio.create_task(bot.send_group_msg(group_id=int(GROUP_ID),
+        #    message="[CQ:at,qq=all]点餐开始了哦！(✪ω✪)\n点餐格式：\n点餐 店名序号 菜名 备注(可选)\n示例：\n点餐 1 香菇滑鸡饭 不要辣"+ MessageSegment.image(
+        #                                     "https://article.biliimg.com/bfs/article/6691afe19dfe408500d6fadb750a7bc039684091.gif")))
+        await asyncio.sleep(1)
         asyncio.create_task(bot.set_group_card(group_id=int(GROUP_ID), user_id=BOT_ID, card="激情点餐ing!(๑´ڡ`๑)"))
 
     asyncio.run(_(bot))
