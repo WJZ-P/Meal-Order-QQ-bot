@@ -11,9 +11,9 @@ import threading
 res_path = os.path.abspath(os.path.dirname(os.path.dirname(__file__))) + "\\resources"
 file_path = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
 BOT_ID=1524550199       #从外面传入的bot机器人ID
-GROUP_ID: int = 801275394    #点餐群号
-START_TIME = "16:33"
-END_TIME = "16:34"
+GROUP_ID: int = 543613447    #点餐群号543613447 测试群是801275394
+START_TIME = "09:00"
+END_TIME = "11:30"
 CAN_ORDER = False       #是否可以点餐
 MENU={}                 #菜单列表
 MENU_PICTURE:str='https://article.biliimg.com/bfs/new_dyn/cc30ea15979e9e46cb70b598a948c38f39684091.png'     #图片的路径
@@ -144,16 +144,19 @@ def register_check_order():
             if not user_order:
                 return await bot.send(event,"你还没有点单哦！(｡･∀･)ﾉﾞ",at_sender=True)
             for order in user_order:#如果有多个点餐信息，我们打印出来
-                await bot.send(event,order.getOrderInfo(),at_sender=True)
+                await bot.send(event,f'下面是你的点单！[CQ:at,qq={event.user_id}]\n'+order.getOrderInfo())
                 await asyncio.sleep(0.3)
          
-        if event.message.startswith("单号查询") and event.group_id==GROUP_ID:
+        if event.message.startswith("单号查询") and event.group_id==GROUP_ID and (event.user_id==1369727119 or event.user_id==XIAOLE_ID):
             order_numbers=event.message[4:].strip().split(' ')
+            has_find=False
             for order_need_to_check in order_numbers:
                 for order in ALL_ORDER:
                     if order.order_number==int(order_need_to_check):
-                        return await bot.send(event,order.getOrderInfo()+f'\n点单同学：[CQ:at,qq={order.qq_number}]')
-            return await bot.send(event,"没有这个订单号哦！(つД`)ノ",at_sender=True)
+                        has_find=True
+                        await bot.send(event,order.getOrderInfo()+f'\n点单同学：[CQ:at,qq={order.qq_number}]')
+            if not has_find:
+                return await bot.send(event,"没有这个订单号哦！(つД`)ノ",at_sender=True)
 
 
 def register_meal_ordering():
@@ -204,7 +207,7 @@ def register_meal_ordering():
                         print(new_order.getOrderInfo())#顺便打印出来看看
                         
                         return await bot.send(event,"点餐成功！٩(≧▽≦*)o\
-                        \n你的单号：" + str(ORDER_NUMBER) + "\n请记得取餐哦！",at_sender=True)
+                        \n你的单号：" + str(ORDER_NUMBER) + f'\n店家：{new_order.shop_name}'+f'\n菜品：{new_order.dish}：{new_order.price}'+"\n请记得取餐哦！",at_sender=True)
                         
 def register_cancel_order():
     """实现群内用户取消点餐功能"""
@@ -213,11 +216,13 @@ def register_cancel_order():
         if (event.message=='取消点餐' or event.message=="取消订单") and event.group_id==GROUP_ID:
             have_order=False
             global ALL_ORDER
+            new_all_order=[]
             for order in ALL_ORDER:
                 if order.qq_number==event.user_id:#找到了这个人的点餐订单
                     have_order=True
-                    ALL_ORDER.remove(order)
-                    print(f"删除了订单{order.order_number}")
+                    print(f"删除掉订单{order.order_number}")
+                else: new_all_order.append(order)
+            ALL_ORDER=new_all_order
             if have_order:
                 return await bot.send(event,f"已取消你的所有点餐！(◕‿◕❀)[CQ:at,qq={event.user_id}]")
             return await bot.send(event,"你没有点餐我取消啥?(=^-ω-^=)",at_sender=True)
@@ -295,23 +300,23 @@ def time_trigger(bot: CQHttp):
     def _():
         time_schedule = schedule.Scheduler()
         #下面是周一到周五点餐的触发器
-        # time_schedule.every().monday.at(START_TIME).do(start_ordering, bot)
-        # time_schedule.every().monday.at(END_TIME).do(stop_ordering, bot)
-        # #
-        # time_schedule.every().tuesday.at(START_TIME).do(start_ordering, bot)
-        # time_schedule.every().tuesday.at(END_TIME).do(stop_ordering, bot)
-        # #
-        # time_schedule.every().wednesday.at(START_TIME).do(start_ordering, bot)
-        # time_schedule.every().wednesday.at(END_TIME).do(stop_ordering, bot)
-        # #
-        # time_schedule.every().thursday.at(START_TIME).do(start_ordering, bot)
-        # time_schedule.every().thursday.at(END_TIME).do(stop_ordering, bot)
-        # #
-        # time_schedule.every().friday.at(START_TIME).do(start_ordering, bot)
-        # time_schedule.every().friday.at(END_TIME).do(stop_ordering, bot)#周五不点餐
+        time_schedule.every().monday.at(START_TIME).do(start_ordering, bot)
+        time_schedule.every().monday.at(END_TIME).do(stop_ordering, bot)
+        #
+        time_schedule.every().tuesday.at(START_TIME).do(start_ordering, bot)
+        time_schedule.every().tuesday.at(END_TIME).do(stop_ordering, bot)
+        #
+        time_schedule.every().wednesday.at(START_TIME).do(start_ordering, bot)
+        time_schedule.every().wednesday.at(END_TIME).do(stop_ordering, bot)
+        #
+        time_schedule.every().thursday.at(START_TIME).do(start_ordering, bot)
+        time_schedule.every().thursday.at(END_TIME).do(stop_ordering, bot)
+        #
+        time_schedule.every().friday.at(START_TIME).do(start_ordering, bot)
+        time_schedule.every().friday.at(END_TIME).do(stop_ordering, bot)
         #周末不点餐
-        time_schedule.every().day.at(START_TIME).do(start_ordering, bot)    #每天这个时候都出发
-        time_schedule.every().day.at(END_TIME).do(stop_ordering, bot)       #每天都触发s
+        # time_schedule.every().day.at(START_TIME).do(start_ordering, bot)    #每天这个时候都出发
+        # time_schedule.every().day.at(END_TIME).do(stop_ordering, bot)       #每天都触发s
         while True:
             time_schedule.run_pending()
             time.sleep(5)
