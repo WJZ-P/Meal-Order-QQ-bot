@@ -176,7 +176,7 @@ def register_meal_ordering():
                         点餐示例: 点餐 1 香菇滑鸡饭",at_sender=True)
                     
                 nums_index=0
-                message=event.message[2:]
+                message=event.message[2:].strip()
                 while message[nums_index].isdigit():  # 获取序号
                     nums_index += 1
                     
@@ -184,7 +184,7 @@ def register_meal_ordering():
                 order_messages.append(message[:nums_index])  # 序号
                 order_messages += message[nums_index:].strip().split(" ")  # 香菇滑鸡饭 备注（可选）
                 
-                result_tuple=find_dish(order_messages)
+                result_tuple=find_dish(order_messages)#(店家序号 菜品名 备注)
                 print(result_tuple)
                 match result_tuple[0]:
                     
@@ -193,7 +193,7 @@ def register_meal_ordering():
                             点餐 1 香菇滑鸡饭\n示例2:\n点餐 1 香菇滑鸡饭 不要辣",at_sender=True)
                         
                     case "DISH_NOT_FOUND":
-                        return await bot.send(event,"这家店没有这个菜哦！请重新点餐！(ㄒoㄒ)", at_sender=True)
+                        return await bot.send(event,"这家店没有这个菜哦！请重新点餐！(ㄒoㄒ)\n注意写备注的话要和菜品名之间隔开空格哦！", at_sender=True)
                     
                     case "FIND_SUCCESS":#成功找到了，下面应该创建订单
                         global ORDER_NUMBER
@@ -207,7 +207,8 @@ def register_meal_ordering():
                         print(new_order.getOrderInfo())#顺便打印出来看看
                         
                         return await bot.send(event,"点餐成功！٩(≧▽≦*)o\
-                        \n你的单号：" + str(ORDER_NUMBER) + f'\n店家：{new_order.shop_name}'+f'\n菜品：{new_order.dish}：{new_order.price}'+"\n请记得取餐哦！",at_sender=True)
+                        \n你的单号：" + str(ORDER_NUMBER) + f'\n店家：{new_order.shop_name}'+f'\n菜品：{new_order.dish}：{new_order.price}'+"\
+                        \n请记得在12:00-12:30到对应的档口按号取餐哦！(取餐时付款)",at_sender=True)
                         
 def register_cancel_order():
     """实现群内用户取消点餐功能"""
@@ -234,6 +235,8 @@ def start_ordering(bot: CQHttp):
         print("开始点餐")
         global CAN_ORDER
         global ORDER_NUMBER
+        global ALL_ORDER
+        ALL_ORDER=[]
         ORDER_NUMBER = 0  # 点餐序号重置
         CAN_ORDER = True
         get_menu()  # 每次开始点餐，更新菜单
@@ -242,7 +245,8 @@ def start_ordering(bot: CQHttp):
 
         asyncio.create_task(bot.send_group_msg(group_id=int(GROUP_ID),#[CQ:at,qq=all]
                                                message="[CQ:at,qq=all]点餐开始了哦！(✪ω✪)\n点餐格式：\n点餐 店名序号 菜名 备注(可选)\n示例：\n点餐 1 香菇滑鸡饭 不要辣" + MessageSegment.image(
-                                                   MENU_PICTURE)+"\n输入“我的单号”来查看取餐号\n输入“菜单”显示菜单\n输入“帮助”来查看指令\n命令都不需要加前缀哦！" + MessageSegment.image(
+                                                   MENU_PICTURE)+"\n输入“我的单号”来查看取餐号\n输入“菜单”显示菜单\n输入“帮助”来查看指令\n命令都不需要加前缀哦！\n\
+                                                    \n注意点餐是我们快乐食间的档口点餐，不是外卖哦！店家需要备餐时间，请在十二点后到档口取餐并付款嘞！" + MessageSegment.image(
                                                    "https://article.biliimg.com/bfs/article/6691afe19dfe408500d6fadb750a7bc039684091.gif")))  # 猫娘炒饭
         # asyncio.create_task(bot.send_group_msg(group_id=int(GROUP_ID),
         #    message="[CQ:at,qq=all]点餐开始了哦！(✪ω✪)\n点餐格式：\n点餐 店名序号 菜名 备注(可选)\n示例：\n点餐 1 香菇滑鸡饭 不要辣"+ MessageSegment.image(
