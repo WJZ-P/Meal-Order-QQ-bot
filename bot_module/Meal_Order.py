@@ -1,16 +1,17 @@
-from aiocqhttp import CQHttp, Event,MessageSegment
-import os
-import json
 import asyncio
 import datetime
-from collections import defaultdict
-import schedule
-import time
+import json
+import os
 import threading
+import time
+
+import schedule
+from aiocqhttp import CQHttp, Event, MessageSegment
+
 # 目录路径
 res_path = os.path.abspath(os.path.dirname(os.path.dirname(__file__))) + "\\resources"
 file_path = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
-BOT_ID=1524550199       #从外面传入的bot机器人ID
+BOT_ID=1916688982       #从外面传入的bot机器人ID
 GROUP_ID: int = 543613447    #点餐群号543613447 测试群是801275394
 START_TIME = "09:00"
 END_TIME = "11:30"
